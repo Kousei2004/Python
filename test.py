@@ -1,227 +1,80 @@
-import pygame
+import cv2
 import numpy as np
-from collections import 
-# Khởi tạo Pygame
-pygame.init()
+import matplotlib.pyplot as plt
 
-# Các hằng số
-TILE_SIZE = 40
-PLAYER = '@'
-BOX = '$'
-TARGET = '.'
-WALL = '#'
-FLOOR = ' '
-BOX_ON_TARGET = '*'
-PLAYER_ON_TARGET = '+'
-
-# Màu sắc
-BLACK = (0, 0, 0)
-WHITE = (255, 255, 255)
-RED = (255, 0, 0)
-GREEN = (0, 255, 0)
-BLUE = (0, 0, 255)
-BROWN = (139, 69, 19)
-
-class SokobanGame:
-    def __init__(self):
-        # Mẫu level đơn giản
-        self.level = [
-            "########",
-            "#      #",
-            "# $@.  #",
-            "#      #",
-            "########"
-        ]
-        self.rows = len(self.level)
-        self.cols = len(self.level[0])
-        self.screen = pygame.display.set_mode((self.cols * TILE_SIZE, self.rows * TILE_SIZE))
-        pygame.display.set_caption('Sokoban with AI Solver')
-        
-        # Chuyển đổi level từ string sang matrix
-        self.state = []
-        self.player_pos = None
-        self.targets = []
-        self.parse_level()
-
-    def parse_level(self):
-        self.state = []
-        for i, row in enumerate(self.level):
-            state_row = []
-            for j, cell in enumerate(row):
-                if cell == PLAYER or cell == PLAYER_ON_TARGET:
-                    self.player_pos = (i, j)
-                if cell == TARGET or cell == PLAYER_ON_TARGET or cell == BOX_ON_TARGET:
-                    self.targets.append((i, j))
-                state_row.append(cell)
-            self.state.append(state_row)
-
-    def draw(self):
-        self.screen.fill(WHITE)
-        for i in range(self.rows):
-            for j in range(self.cols):
-                rect = pygame.Rect(j * TILE_SIZE, i * TILE_SIZE, TILE_SIZE, TILE_SIZE)
-                if self.state[i][j] == WALL:
-                    pygame.draw.rect(self.screen, BLACK, rect)
-                elif self.state[i][j] == TARGET or self.state[i][j] == PLAYER_ON_TARGET:
-                    pygame.draw.rect(self.screen, GREEN, rect, 2)
-                if self.state[i][j] == PLAYER or self.state[i][j] == PLAYER_ON_TARGET:
-                    pygame.draw.circle(self.screen, BLUE, 
-                                    (j * TILE_SIZE + TILE_SIZE//2, 
-                                     i * TILE_SIZE + TILE_SIZE//2), 
-                                    TILE_SIZE//3)
-                elif self.state[i][j] == BOX or self.state[i][j] == BOX_ON_TARGET:
-                    pygame.draw.rect(self.screen, BROWN,
-                                  (j * TILE_SIZE + 5, i * TILE_SIZE + 5,
-                                   TILE_SIZE - 10, TILE_SIZE - 10))
-        pygame.display.flip()
-
-    def is_valid_move(self, row, col):
-        return (0 <= row < self.rows and 
-                0 <= col < self.cols and 
-                self.state[row][col] != WALL)
-
-    def move(self, d_row, d_col):
-        row, col = self.player_pos
-        new_row, new_col = row + d_row, col + d_col
-        
-        if not self.is_valid_move(new_row, new_col):
-            return False
-
-        # Kiểm tra nếu có hộp
-        if self.state[new_row][new_col] in [BOX, BOX_ON_TARGET]:
-            box_new_row, box_new_col = new_row + d_row, new_col + d_col
-            if not self.is_valid_move(box_new_row, box_new_col):
-                return False
-            if self.state[box_new_row][box_new_col] in [BOX, BOX_ON_TARGET, WALL]:
-                return False
-                
-            # Di chuyển hộp
-            if (box_new_row, box_new_col) in self.targets:
-                self.state[box_new_row][box_new_col] = BOX_ON_TARGET
-            else:
-                self.state[box_new_row][box_new_col] = BOX
-
-        # Di chuyển người chơi
-        if (new_row, new_col) in self.targets:
-            self.state[new_row][new_col] = PLAYER_ON_TARGET
-        else:
-            self.state[new_row][new_col] = PLAYER
-
-        # Xóa vị trí cũ của người chơi
-        if (row, col) in self.targets:
-            self.state[row][col] = TARGET
-        else:
-            self.state[row][col] = FLOOR
-
-        self.player_pos = (new_row, new_col)
-        return True
-
-    def is_solved(self):
-        for target in self.targets:
-            i, j = target
-            if self.state[i][j] not in [BOX_ON_TARGET, PLAYER_ON_TARGET]:
-                return False
-        return True
-
-class SokobanSolver:
-    def __init__(self, game):
-        self.game = game
-        
-    def get_state_string(self, state):
-        return ''.join([''.join(row) for row in state])
+def display_color_spaces(image_path):
+    # Đọc ảnh
+    img = cv2.imread(image_path)
     
-    def solve_bfs(self):
-        initial_state = copy.deepcopy(self.game.state)
-        initial_pos = self.game.player_pos
-        
-        queue = deque([(initial_state, initial_pos, [])])
-        visited = set()
-        
-        moves = [(0, 1), (0, -1), (1, 0), (-1, 0)]  # right, left, down, up
-        move_names = ['RIGHT', 'LEFT', 'DOWN', 'UP']
-        
-        while queue:
-            current_state, current_pos, path = queue.popleft()
-            state_string = self.get_state_string(current_state)
-            
-            if state_string in visited:
-                continue
-                
-            visited.add(state_string)
-            
-            # Kiểm tra xem đã giải được chưa
-            temp_game = SokobanGame()
-            temp_game.state = copy.deepcopy(current_state)
-            temp_game.player_pos = current_pos
-            if temp_game.is_solved():
-                return path
-            
-            # Thử mọi bước đi có thể
-            for (d_row, d_col), move_name in zip(moves, move_names):
-                temp_game = SokobanGame()
-                temp_game.state = copy.deepcopy(current_state)
-                temp_game.player_pos = current_pos
-                
-                if temp_game.move(d_row, d_col):
-                    queue.append((temp_game.state, temp_game.player_pos, path + [move_name]))
-        
-        return None
+    # Chuyển đổi sang các không gian màu khác nhau
+    rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+    yuv = cv2.cvtColor(img, cv2.COLOR_BGR2YUV)
+    
+    # Tách các kênh màu
+    r, g, b = cv2.split(rgb)
+    h, s, v = cv2.split(hsv)
+    l, a, b_lab = cv2.split(lab)
+    y, u, v_yuv = cv2.split(yuv)
+    
+    # Hiển thị
+    plt.figure(figsize=(15, 12))
+    
+    # RGB
+    plt.subplot(431), plt.imshow(r, cmap='gray'), plt.title('Red Channel')
+    plt.subplot(432), plt.imshow(g, cmap='gray'), plt.title('Green Channel')
+    plt.subplot(433), plt.imshow(b, cmap='gray'), plt.title('Blue Channel')
+    
+    # HSV
+    plt.subplot(434), plt.imshow(h, cmap='gray'), plt.title('Hue')
+    plt.subplot(435), plt.imshow(s, cmap='gray'), plt.title('Saturation')
+    plt.subplot(436), plt.imshow(v, cmap='gray'), plt.title('Value')
+    
+    # LAB
+    plt.subplot(437), plt.imshow(l, cmap='gray'), plt.title('Lightness')
+    plt.subplot(438), plt.imshow(a, cmap='gray'), plt.title('A Channel')
+    plt.subplot(439), plt.imshow(b_lab, cmap='gray'), plt.title('B Channel')
+    
+    # YUV
+    plt.subplot(4,3,10), plt.imshow(y, cmap='gray'), plt.title('Y Channel')
+    plt.subplot(4,3,11), plt.imshow(u, cmap='gray'), plt.title('U Channel')
+    plt.subplot(4,3,12), plt.imshow(v_yuv, cmap='gray'), plt.title('V Channel')
+    
+    plt.tight_layout()
+    plt.show()
 
-def main():
-    game = SokobanGame()
-    solver = SokobanSolver(game)
-    running = True
-    solution = None
-    solution_index = 0
+# Mô phỏng quá trình thu nhận ảnh
+def simulate_image_acquisition(image_path):
+    # Đọc ảnh gốc
+    original = cv2.imread(image_path)
     
-    clock = pygame.time.Clock()
+    # Mô phỏng nhiễu cảm biến
+    noise = np.random.normal(0, 25, original.shape).astype(np.uint8)
+    noisy_img = cv2.add(original, noise)
     
-    while running:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
-            elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_SPACE:
-                    # Tìm giải pháp khi nhấn space
-                    print("Finding solution...")
-                    solution = solver.solve_bfs()
-                    if solution:
-                        print("Solution found:", solution)
-                        solution_index = 0
-                    else:
-                        print("No solution found!")
-                elif event.key == pygame.K_r:
-                    # Reset game
-                    game = SokobanGame()
-                    solver = SokobanSolver(game)
-                    solution = None
-                elif event.key == pygame.K_RIGHT:
-                    game.move(0, 1)
-                elif event.key == pygame.K_LEFT:
-                    game.move(0, -1)
-                elif event.key == pygame.K_DOWN:
-                    game.move(1, 0)
-                elif event.key == pygame.K_UP:
-                    game.move(-1, 0)
-        
-        # Thực hiện các bước trong giải pháp
-        if solution and solution_index < len(solution):
-            move = solution[solution_index]
-            if move == 'RIGHT':
-                game.move(0, 1)
-            elif move == 'LEFT':
-                game.move(0, -1)
-            elif move == 'DOWN':
-                game.move(1, 0)
-            elif move == 'UP':
-                game.move(-1, 0)
-            solution_index += 1
-            pygame.time.wait(500)  # Đợi 500ms giữa các bước
-        
-        game.draw()
-        clock.tick(30)
+    # Mô phỏng thay đổi độ sáng
+    gamma = 1.5
+    brightened = np.array(255 * (original / 255) ** gamma, dtype=np.uint8)
     
-    pygame.quit()
+    # Mô phỏng mờ do chuyển động
+    blurred = cv2.blur(original, (5, 5))
+    
+    # Hiển thị kết quả
+    plt.figure(figsize=(15, 5))
+    images = [original, noisy_img, brightened, blurred]
+    titles = ['Ảnh Gốc', 'Nhiễu Cảm Biến', 'Thay Đổi Độ Sáng', 'Mờ Do Chuyển Động']
+    
+    for i in range(4):
+        plt.subplot(1, 4, i+1)
+        plt.imshow(cv2.cvtColor(images[i], cv2.COLOR_BGR2RGB))
+        plt.title(titles[i])
+        plt.axis('off')
+    
+    plt.tight_layout()
+    plt.show()
 
-if __name__ == "__main__":
-    main()
+# Sử dụng
+image_path = 'star_solved.png'
+display_color_spaces(image_path)
+simulate_image_acquisition(image_path)

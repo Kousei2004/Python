@@ -83,7 +83,7 @@ def detect_faces(image_path):
 # Ví dụ sử dụng
 if __name__ == "__main__":
     # Thay thế 'path_to_image.jpg' bằng đường dẫn đến ảnh của bạn
-    image_path = 'path_to_image.jpg'
+    image_path = 'star_solved.png'
     
     print("Xử lý ảnh cơ bản...")
     process_image(image_path)
